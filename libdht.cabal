@@ -22,12 +22,14 @@ executable dht_test
   -- exposed-modules:     Network.DHT
   -- other-modules:       
   -- other-extensions:    
-  build-depends:       base >=4.6 && <4.7,
+  build-depends:       base,
+                       base16-bytestring,
+                       bytestring,
                        network
   -- hs-source-dirs:      
   default-language:    Haskell2010
   -- extra-lib-dirs:      ${pkgroot}
   c-sources:           dht/dht.c dht_impl/dht_impl.c
-  include-dirs:        dht
+  include-dirs:        dht, dht_impl
   --includes:            dht.h
   extra-libraries:     crypt

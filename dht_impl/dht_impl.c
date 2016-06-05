@@ -58,3 +58,8 @@ dht_random_bytes(void *buf, size_t size)
 
     return rc;
 }
+
+// debugging
+void dht_debug_to_stderr() {
+  dht_debug = stderr;
+}
