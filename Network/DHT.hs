@@ -90,8 +90,16 @@ foreign import ccall safe "dht/dht.h dht_nodes" dht_nodes
   -> IO Int
 
 -- void dht_dump_tables(FILE *f);
+
 -- int dht_get_nodes(struct sockaddr_in *sin, int *num,
 --                   struct sockaddr_in6 *sin6, int *num6);
+foreign import ccall safe "dht/dht.h dht_get_nodes" dht_get_nodes
+  :: Ptr SockAddr -- ^ sockaddr_in
+  -> Ptr CInt -- ^ num
+  -> Ptr SockAddr -- ^ sockaddr_in6
+  -> Ptr CInt -- ^ num6
+  -> IO Int
+
 -- int dht_uninit(void);
 foreign import ccall safe "dht/dht.h dht_uninit"
   dht_uninit :: IO Int
@@ -136,6 +144,23 @@ unwrapIpv6 :: SockAddr -> SockAddr
 unwrapIpv6 (SockAddrInet6 port _ (0, 0, 0xffff, ipv4addr) _) =
   SockAddrInet port (byteSwap32 ipv4addr)
 unwrapIpv6 sa = sa
+
+withSockAddrArray_ :: Family -> Int -> (Ptr SockAddr -> Ptr CInt -> IO a) -> IO (a, [SockAddr])
+withSockAddrArray_ family count act =
+    alloca $ \numptr ->
+      allocaBytes (sizeOfSockAddrByFamily family * count) $ \saptr -> do
+        poke numptr (fromIntegral count)
+        r <- act saptr numptr
+        -- retrieve the results
+        c <- fromIntegral <$> peek numptr
+        sas <- loopPtr saptr c
+        return (r, sas)
+  where
+    loopPtr :: Ptr SockAddr -> Int -> IO [SockAddr]
+    loopPtr ptr 0 = return []
+    loopPtr ptr n = do
+      sa <- peekSockAddr ptr
+      (sa :) <$> loopPtr (plusPtr ptr (sizeOfSockAddr sa)) (n - 1)
 
 main :: IO ()
 main = do
@@ -228,8 +253,14 @@ main = do
           (g4, d4) <- status 2 -- ipv4
           (g6, d6) <- status 10 -- ipv6
 
+          -- Dump the table
+          ((_, nodes6), nodes4) <- withSockAddrArray_ AF_INET 1024 $ \sa4 num4 -> do
+            withSockAddrArray_ AF_INET6 1024 $ \sa6 num6 ->
+              dht_get_nodes sa4 num4 sa6 num6
+          print (nodes4, nodes6)
+
           -- TEST
-          when ((g4 + g6 >= 4) && (d6 + d6 >= 30)) $ do
+          when ((g4 + g6 >= 4) && (g4 + g6 + d4 + d6 >= 30)) $ do
             putStrLn "Starting search <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
             -- debian-8.5.0-amd64-netinst.iso.torrent
             let (ihash, _) = B16.decode "47b9ad52c009f3bd562ffc6da40e5c55d3fb47f3"
