@@ -19,11 +19,13 @@ extra-source-files:  dht, dht_impl
 -- library
 executable dht_test
   main-is: Network/DHT.hs
-  -- exposed-modules:     Network.DHT
-  -- other-modules:       
+  -- exposed-modules:     Network.DHT.Native
+  other-modules:       Network.DHT.Native.FFI
   -- other-extensions:    
   build-depends:       base,
+                       base-compat,
                        base16-bytestring,
+                       byteorder,
                        bytestring,
                        network
   -- hs-source-dirs:      

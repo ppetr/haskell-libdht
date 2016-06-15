@@ -8,8 +8,7 @@ import Control.Monad
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Base16 as B16
-import Data.Word (byteSwap32)
-import Foreign.C.Error
+import Data.Word.Compat (byteSwap32, Word32)
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Marshal.Alloc
@@ -18,98 +17,11 @@ import Foreign.Ptr
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
 import Network.Socket.Internal
+import System.ByteOrder
 
--- typedef void
--- dht_callback(void *closure, int event,
---              const unsigned char *info_hash,
---              const void *data, size_t data_len);
-type Callback a =
-     Ptr a -- ^ closure
-  -> CInt -- ^ event
-  -> CString -- ^ info_hash
-  -> CString -- ^ data
-  -> CSize -- ^ data_len
-  -> IO ()
+import Network.DHT.Native.FFI
 
-foreign import ccall "wrapper"
-  mkCallback :: Callback a -> IO (FunPtr (Callback a))
-
--- int dht_init(int s, int s6, const unsigned char *id, const unsigned char *v);
-foreign import ccall safe "dht/dht.h dht_init"
-  dht_init :: CInt -- ^ socket handle
-           -> CInt -- ^ ipv6 socket handle
-           -> CString -- ^ node id, 20 octet array
-           -> CString -- ^ v
-           -> IO Int
-
--- int dht_insert_node(const unsigned char *id, struct sockaddr *sa, int salen);
-foreign import ccall safe "dht/dht.h dht_insert_node" dht_insert_node
-  :: CString -- ^ id
-  -> Ptr SockAddr -- ^ sockaddr
-  -> CInt -- ^ salen
-  -> IO Int
-
--- int dht_ping_node(struct sockaddr *sa, int salen);
-foreign import ccall safe "dht/dht.h dht_ping_node" dht_ping_node
-  :: Ptr SockAddr
-  -> CInt
-  -> IO Int
-
--- int dht_periodic(const void *buf, size_t buflen,
---                  const struct sockaddr *from, int fromlen,
---                  time_t *tosleep, dht_callback *callback, void *closure);
-foreign import ccall safe "dht/dht.h dht_periodic" dht_periodic
-  :: CString -- ^ buf
-  -> CSize -- ^ buflen
-  -> Ptr SockAddr -- ^ from
-  -> CInt -- ^ fromlen
-  -> Ptr CTime -- ^ tosleep
-  -> FunPtr (Callback a) -- ^ callback
-  -> Ptr a -- ^ closure
-  -> IO Int
-
--- int dht_search(const unsigned char *id, int port, int af,
---                dht_callback *callback, void *closure);
-foreign import ccall safe "dht/dht.h dht_search" dht_search
-  :: CString -- ^ id
-  -> CInt -- ^ port
-  -> CInt -- ^ af
-  -> FunPtr (Callback a) -- ^ callback
-  -> Ptr a -- ^ closure
-  -> IO Int
-
--- int dht_nodes(int af,
---               int *good_return, int *dubious_return, int *cached_return,
---               int *incoming_return);
-foreign import ccall safe "dht/dht.h dht_nodes" dht_nodes
-  :: CInt -- ^ af
-  -> Ptr CInt -- good
-  -> Ptr CInt -- dubious
-  -> Ptr CInt -- cached
-  -> Ptr CInt -- incoming
-  -> IO Int
-
--- void dht_dump_tables(FILE *f);
-
--- int dht_get_nodes(struct sockaddr_in *sin, int *num,
---                   struct sockaddr_in6 *sin6, int *num6);
-foreign import ccall safe "dht/dht.h dht_get_nodes" dht_get_nodes
-  :: Ptr SockAddr -- ^ sockaddr_in
-  -> Ptr CInt -- ^ num
-  -> Ptr SockAddr -- ^ sockaddr_in6
-  -> Ptr CInt -- ^ num6
-  -> IO Int
-
--- int dht_uninit(void);
-foreign import ccall safe "dht/dht.h dht_uninit"
-  dht_uninit :: IO Int
-
--- * Debugging, custom code
-
-foreign import ccall safe "dht_impl/dht_impl.h dht_debug_to_stderr"
-  dht_debug_to_stderr :: IO ()
-
--- *
+-- * Bootstrapping
 
 bootstrapNodes :: IO [SockAddr]
 bootstrapNodes = liftM concat . forM nodes $ \host -> do
@@ -140,9 +52,16 @@ bootstrapNodes = liftM concat . forM nodes $ \host -> do
   ]
 -}
 
+-- * Utilities
+
+hostToNetwork :: Word32 -> Word32
+hostToNetwork = case byteOrder of
+    LittleEndian -> byteSwap32
+    _ -> id
+
 unwrapIpv6 :: SockAddr -> SockAddr
 unwrapIpv6 (SockAddrInet6 port _ (0, 0, 0xffff, ipv4addr) _) =
-  SockAddrInet port (byteSwap32 ipv4addr)
+  SockAddrInet port (hostToNetwork ipv4addr)
 unwrapIpv6 sa = sa
 
 withSockAddrArray_ :: Family -> Int -> (Ptr SockAddr -> Ptr CInt -> IO a) -> IO (a, [SockAddr])
@@ -162,10 +81,14 @@ withSockAddrArray_ family count act =
       sa <- peekSockAddr ptr
       (sa :) <$> loopPtr (plusPtr ptr (sizeOfSockAddr sa)) (n - 1)
 
+-- * Main
+
 main :: IO ()
 main = do
   -- set debugging
   dht_debug_to_stderr
+
+  searchOpen <- newMVar ()
 
   nodeId <- newCString "01234567890123456789"
   s <- socket AF_INET6 Datagram defaultProtocol
@@ -174,15 +97,16 @@ main = do
   s <- socket AF_INET Datagram defaultProtocol
   bind s $ SockAddrInet aNY_PORT $ 0 -- 192 + 168 * 0x100 + 17 * 0x10000 + 103 * 0x1000000
   -}
+  port <- socketPort s
+  putStrLn $ "Listening on port " ++ show port
   let fd = fdSocket s
-  throwErrnoIfMinus1 "dht_init" $ dht_init fd fd nodeId nullPtr
+  dht_init fd fd nodeId nullPtr
   flip finally dht_uninit $ do
-
     bnodes <- bootstrapNodes
     forM_ bnodes $ \sa -> do
       putStrLn $ "Bootstrapping node " ++ show sa
       withSockAddr sa $ \saptr salen ->
-        throwErrnoIfMinus1 "dht_ping_node" $ dht_ping_node saptr (fromIntegral salen)
+        dht_ping_node saptr (fromIntegral salen)
 
     timeoutMVar <- newMVar 0
     dataMVar <- newEmptyMVar
@@ -204,25 +128,22 @@ main = do
     callback <- mkCallback $ \cptr ev ihash dataptr datalen -> do
       s <- peekCAStringLen (dataptr, fromIntegral datalen)
       hash <- peekCAStringLen (ihash, 20)
-      putStrLn $ "Event " ++ show ev ++ ", data length " ++ show datalen
+      putStrLn $ ">>> Event " ++ show ev ++ ", data length " ++ show datalen
                  ++ ", data " ++ s ++ ", hash " ++ hash
 
     flip finally (freeHaskellFunPtr callback) $ do
       alloca $ \tosleep'p -> do
-        throwErrnoIfMinus1 "dht_periodic/0"
-          $ dht_periodic nullPtr 0 nullPtr 0 tosleep'p callback nullPtr
+        dht_periodic nullPtr 0 nullPtr 0 tosleep'p callback nullPtr
 
         forever $ do
           input'm <- takeMVar dataMVar
           case input'm of
               Nothing -> 
-                  throwErrnoIfMinus1 "dht_periodic/0"
-                  $ dht_periodic nullPtr 0 nullPtr 0 tosleep'p callback nullPtr
+                  dht_periodic nullPtr 0 nullPtr 0 tosleep'p callback nullPtr
               Just (bs, sa) ->
                   BS.useAsCStringLen bs $ \(ptr, len) ->
                       withSockAddr sa $ \saptr salen -> do
-                          throwErrnoIfMinus1 "dht_periodic/0"
-                          $ dht_periodic ptr (fromIntegral len)
+                          dht_periodic ptr (fromIntegral len)
                                          saptr (fromIntegral salen)
                                          tosleep'p callback nullPtr
                                 
@@ -237,8 +158,7 @@ main = do
                   alloca $ \dubiousptr ->
                     alloca $ \cachedptr ->
                       alloca $ \incomingptr -> do
-                        throwErrnoIfMinus1 "dht_nodes"
-                          $ dht_nodes af goodptr dubiousptr cachedptr incomingptr
+                        dht_nodes af goodptr dubiousptr cachedptr incomingptr
                         good <- peek goodptr
                         dubious <- peek dubiousptr
                         cached <- peek cachedptr
@@ -260,13 +180,16 @@ main = do
           print (nodes4, nodes6)
 
           -- TEST
-          when ((g4 + g6 >= 4) && (g4 + g6 + d4 + d6 >= 30)) $ do
+          started <- isEmptyMVar searchOpen
+          when (not started && (({-g4 + -} g6 >= 4) && ({-g4 + d4 + -}g6 + d6 >= 30))) $ do
+            takeMVar searchOpen
             putStrLn "Starting search <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
             -- debian-8.5.0-amd64-netinst.iso.torrent
             let (ihash, _) = B16.decode "47b9ad52c009f3bd562ffc6da40e5c55d3fb47f3"
             print $ BS.length ihash
             BS.useAsCString ihash $ \hash ->
-              throwErrnoIfMinus1_ "dht_search"
-                $ dht_search hash 0 {-af=-}10 callback nullPtr
+                dht_search hash 0 {-af=-}2 callback nullPtr
+            BS.useAsCString ihash $ \hash ->
+                dht_search hash 0 {-af=-}10 callback nullPtr
 
           tryPutMVar timeoutMVar tosleep'i
