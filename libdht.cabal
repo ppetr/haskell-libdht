@@ -20,11 +20,15 @@ extra-source-files:  dht, dht_impl
 executable dht_test
   main-is: Network/DHT.hs
   -- exposed-modules:     Network.DHT.Native
-  other-modules:       Network.DHT.Native.FFI
+  other-modules:       Network.DHT.Native
+                       Network.DHT.Native.FFI
+                       Network.DHT.Native.Stats
   -- other-extensions:    
   build-depends:       base,
                        base16-bytestring,
                        bytestring,
+                       kan-extensions,
+                       mtl,
                        network
   -- hs-source-dirs:      
   default-language:    Haskell2010

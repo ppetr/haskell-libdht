@@ -8,6 +8,7 @@ import Control.Monad
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Base16 as B16
+import Data.Monoid
 import Data.Word (Word32)
 import Foreign.C.String
 import Foreign.C.Types
@@ -18,6 +19,7 @@ import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
 import Network.Socket.Internal
 
+import Network.DHT.Native
 import Network.DHT.Native.FFI
 
 -- * Bootstrapping
@@ -150,25 +152,8 @@ main = do
           let (CTime tosleep'i) = tosleep
 
           -- print nodes stats
-          let status af = 
-                alloca $ \goodptr ->
-                  alloca $ \dubiousptr ->
-                    alloca $ \cachedptr ->
-                      alloca $ \incomingptr -> do
-                        dht_nodes af goodptr dubiousptr cachedptr incomingptr
-                        good <- peek goodptr
-                        dubious <- peek dubiousptr
-                        cached <- peek cachedptr
-                        incoming <- peek incomingptr
-                        putStrLn $ "AF:" ++ show af
-                                   ++ " good = " ++ show good
-                                   ++ ", dubious = " ++ show dubious
-                                   ++ ", cached = " ++ show cached
-                                   ++ ", incoming = " ++ show incoming
-                        return (good, dubious)
-
-          (g4, d4) <- status 2 -- ipv4
-          (g6, d6) <- status 10 -- ipv6
+          stats <- nodeStats
+          putStrLn $ "Node stats: " ++ show stats
 
           -- Dump the table
           ((_, nodes6), nodes4) <- withSockAddrArray_ AF_INET 1024 $ \sa4 num4 -> do
@@ -178,7 +163,7 @@ main = do
 
           -- TEST
           started <- isEmptyMVar searchOpen
-          when (not started && (({-g4 + -} g6 >= 4) && ({-g4 + d4 + -}g6 + d6 >= 30))) $ do
+          when (not started && enoughNodesForSearch (uncurry mappend stats)) $ do
             takeMVar searchOpen
             putStrLn "Starting search <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
             -- debian-8.5.0-amd64-netinst.iso.torrent
