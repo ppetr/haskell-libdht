@@ -23,9 +23,7 @@ executable dht_test
   other-modules:       Network.DHT.Native.FFI
   -- other-extensions:    
   build-depends:       base,
-                       base-compat,
                        base16-bytestring,
-                       byteorder,
                        bytestring,
                        network
   -- hs-source-dirs:      

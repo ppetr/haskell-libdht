@@ -1,6 +1,7 @@
 module Network.DHT.Native.FFI where
 
 import           Control.Monad (void)
+import           Data.Word (Word32)
 import           Foreign.C.Error
 import           Foreign.C.String
 import           Foreign.C.Types
@@ -181,3 +182,8 @@ dht_uninit = void . throwErrnoIfMinus1 "dht_uninit" $ dht_uninit_ffi
 
 foreign import ccall safe "dht_impl/dht_impl.h dht_debug_to_stderr"
   dht_debug_to_stderr :: IO ()
+
+-- * Auxiliary utility functions
+
+foreign import ccall unsafe "htonl"
+    htonl :: Word32 -> Word32

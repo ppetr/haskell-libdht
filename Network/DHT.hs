@@ -8,7 +8,7 @@ import Control.Monad
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Base16 as B16
-import Data.Word.Compat (byteSwap32, Word32)
+import Data.Word (Word32)
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Marshal.Alloc
@@ -17,7 +17,6 @@ import Foreign.Ptr
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
 import Network.Socket.Internal
-import System.ByteOrder
 
 import Network.DHT.Native.FFI
 
@@ -55,9 +54,7 @@ bootstrapNodes = liftM concat . forM nodes $ \host -> do
 -- * Utilities
 
 hostToNetwork :: Word32 -> Word32
-hostToNetwork = case byteOrder of
-    LittleEndian -> byteSwap32
-    _ -> id
+hostToNetwork = htonl
 
 unwrapIpv6 :: SockAddr -> SockAddr
 unwrapIpv6 (SockAddrInet6 port _ (0, 0, 0xffff, ipv4addr) _) =
