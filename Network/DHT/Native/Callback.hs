@@ -40,9 +40,15 @@ makeCallback f _ event hash val vallen = do
 -- | Parses a 6-byte compact IPv4 address.
 parseCompactIPv4 :: Get SockAddr
 parseCompactIPv4 = do
-    addr <- getWord32be
+    -- HostAddress is somewhat misleadingly documented as "host byte order".
+    -- More correctly it seems that for little-endian architectures the byte
+    -- order in HostAddresss is reversed. So here we employ a little trick:
+    -- The address in the input stream is in network (big-endian) byte order,
+    -- but we read it as if it were in host byte order. This flips the order on
+    -- LE architectures, getting what SockAddrInet expects.
+    addr <- getWord32host
     port <- getInt16be
-    return $ SockAddrInet (fromIntegral port) (F.htonl addr)
+    return $ SockAddrInet (fromIntegral port) addr
 
 -- | Parses a 18-byte compact IPv6 address.
 parseCompactIPv6 :: Get SockAddr
