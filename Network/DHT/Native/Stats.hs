@@ -5,7 +5,7 @@ import           Control.Monad.Trans
 import           Data.Monoid
 import qualified Foreign.Storable as P
 
-import           Network.DHT.Native.FFI
+import qualified Network.DHT.Native.FFI as F
 import           Network.DHT.Native.Util
 
 data NodeStats = NodeStats
@@ -27,7 +27,7 @@ nodeStats = (,) <$> stats afIPv4 <*> stats afIPv6
     stats af = lowerCodensity $ do
         (goodptr, dubiousptr, cachedptr, incomingptr) <-
             (,,,) <$> alloca <*> alloca <*> alloca <*> alloca
-        lift $ dht_nodes af goodptr dubiousptr cachedptr incomingptr
+        lift $ F.dht_nodes af goodptr dubiousptr cachedptr incomingptr
         NodeStats <$> peek' goodptr <*> peek' dubiousptr
                   <*> peek' cachedptr <*> peek' incomingptr
     peek' ptr = lift (fromIntegral <$> P.peek ptr)
