@@ -28,14 +28,14 @@ bootstrapNodes :: IO [SockAddr]
 bootstrapNodes = liftM concat . forM nodes $ \host -> do
     liftM (map addrAddress) $ lookup host
   where
-    lookup host = do
+    lookup (host, port) = do
       let hints = defaultHints { addrFlags = [AI_ALL] }
-      getAddrInfo (Just hints) (Just host) (Just "6881")
+      getAddrInfo (Just hints) (Just host) (Just $ show port)
     nodes =
-      [ "router.utorrent.com"
-      , "router.bittorrent.com"
-      , "dht.transmissionbt.com"
-      , "dht.aelitis.com"
+      [ ("router.utorrent.com", 6881)
+      , ("router.bittorrent.com", 6881)
+      , ("dht.transmissionbt.com", 6881)
+      , ("dht.aelitis.com", 6881)
       ]
 {-
   -- [ SockAddrInet 6881 (87 * 0x1000000 + 98 * 0x10000 + 162 * 0x100 + 88)
@@ -160,9 +160,9 @@ main = do
 
           -- TEST
           started <- isEmptyMVar searchOpen
-          when (not started && enoughNodesForSearch (uncurry mappend stats)) $ do
+          when (not started && enoughNodesForSearch ({- uncurry mappend stats -} snd stats)) $ do
             takeMVar searchOpen
-            putStrLn "Starting search <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+            putStrLn ">>>>>>>>>>>>>>>>>>>>>>> Starting search"
             -- debian-8.5.0-amd64-netinst.iso.torrent
             let (ihash, _) = B16.decode "47b9ad52c009f3bd562ffc6da40e5c55d3fb47f3"
             print $ BS.length ihash
