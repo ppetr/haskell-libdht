@@ -27,6 +27,7 @@ executable dht_test
   build-depends:       base,
                        base16-bytestring,
                        bytestring,
+                       cereal,
                        kan-extensions,
                        mtl,
                        network

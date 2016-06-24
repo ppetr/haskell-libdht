@@ -124,11 +124,8 @@ main = do
         putStrLn $ "Received data from " ++ show f'
         putMVar dataMVar (Just (d, f'))
         
-    callback <- mkCallback $ \cptr ev ihash dataptr datalen -> do
-      s <- peekCAStringLen (dataptr, fromIntegral datalen)
-      hash <- peekCAStringLen (ihash, 20)
-      putStrLn $ ">>> Event " ++ show ev ++ ", data length " ++ show datalen
-                 ++ ", data " ++ s ++ ", hash " ++ hash
+    callback <- mkCallback . makeCallback $ \ihash result -> do
+      putStrLn $ ">>> Event: " ++ show ihash ++ " -> " ++ show result
 
     flip finally (freeHaskellFunPtr callback) $ do
       alloca $ \tosleep'p -> do
