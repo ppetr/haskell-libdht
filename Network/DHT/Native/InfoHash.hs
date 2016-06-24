@@ -1,10 +1,15 @@
 module Network.DHT.Native.InfoHash
-    ( InfoHash()
+    ( -- * Basic functions
+      InfoHash()
     , toInfoHash
     , fromInfoHash
+      -- * Random generation
+    , getRandomInfoHash
     ) where
 
 import           Control.DeepSeq (NFData(..))
+import           Control.Monad (replicateM)
+import           Control.Monad.Random
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import           Data.Maybe (mapMaybe)
@@ -47,6 +52,14 @@ instance Storable InfoHash where
     poke ptr (InfoHash bs) =
         BS.useAsCStringLen bs $ \(src, len) ->
             copyBytes (castPtr ptr) src (max len infoHashLength)
+
+-- | A basic random generator using MonadRandom. Within 'IO' you can create
+-- a random 'InfoHash' with @evalRandIO getRandomInfoHash@.
+--
+-- You might consider using the cryptonite package instead, by generating
+-- a random 'ByteString' and then packing it using 'toInfoHash'.
+getRandomInfoHash :: (MonadRandom m) => m InfoHash
+getRandomInfoHash = InfoHash . BS.pack <$> replicateM infoHashLength getRandom
 
 infoHashLength :: Int
 infoHashLength = 20

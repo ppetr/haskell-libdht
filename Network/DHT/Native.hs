@@ -3,6 +3,7 @@ module Network.DHT.Native
       InfoHash()
     , fromInfoHash
     , toInfoHash
+    , getRandomInfoHash
       -- * Node statistics
     , NodeStats
     , nodeStats

@@ -30,6 +30,7 @@ executable dht_test
                        cereal,
                        deepseq,
                        kan-extensions,
+                       MonadRandom,
                        mtl,
                        network
   -- hs-source-dirs:      
