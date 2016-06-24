@@ -28,6 +28,7 @@ executable dht_test
                        base16-bytestring,
                        bytestring,
                        cereal,
+                       deepseq,
                        kan-extensions,
                        mtl,
                        network

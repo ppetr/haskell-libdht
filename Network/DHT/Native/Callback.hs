@@ -3,12 +3,11 @@ module Network.DHT.Native.Callback where
 import           Control.Applicative (many)
 import qualified Data.ByteString as BS
 import           Data.Serialize.Get
+import           Foreign.Storable (peek)
 import           Network.Socket (SockAddr(..))
 
 import qualified Network.DHT.Native.FFI as F
-
--- TODO: Move somewhere
-type InfoHash = BS.ByteString
+import           Network.DHT.Native.InfoHash
 
 data SearchResult
     = Done4
@@ -18,8 +17,8 @@ data SearchResult
   deriving (Eq, Ord, Show)
 
 makeCallback :: (InfoHash -> SearchResult -> IO ()) -> F.Callback ()
-makeCallback f _ event hash val vallen = do
-    ih <- BS.packCStringLen (hash, 20)
+makeCallback f _ event hashptr val vallen = do
+    ih <- peek hashptr :: IO InfoHash
     -- TODO: Event number constants
     case event of
         0 -> return ()

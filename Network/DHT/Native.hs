@@ -1,6 +1,10 @@
 module Network.DHT.Native
-    ( -- * Node statistics
-      NodeStats
+    ( -- * InfoHash
+      InfoHash()
+    , fromInfoHash
+    , toInfoHash
+      -- * Node statistics
+    , NodeStats
     , nodeStats
     , enoughNodesForSearch
     -- * Callbacks
@@ -9,4 +13,5 @@ module Network.DHT.Native
     ) where
 
 import Network.DHT.Native.Callback
+import Network.DHT.Native.InfoHash
 import Network.DHT.Native.Stats

@@ -8,6 +8,8 @@ import           Foreign.C.Types
 import           Foreign.Ptr
 import           Network.Socket hiding (send, sendTo, recv, recvFrom)
 
+import           Network.DHT.Native.InfoHash (InfoHash())
+
 -- * The callback function
 
 -- typedef void
@@ -17,7 +19,7 @@ import           Network.Socket hiding (send, sendTo, recv, recvFrom)
 type Callback a =
      Ptr a -- ^ closure
   -> CInt -- ^ event
-  -> CString -- ^ info_hash
+  -> Ptr InfoHash -- ^ info_hash
   -> CString -- ^ data
   -> CSize -- ^ data_len
   -> IO ()
